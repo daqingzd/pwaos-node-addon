@@ -138,11 +138,12 @@ static napi_value InstanceGetProperties(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  // 准备输出结构体
-  pwaosInstanceProperties props;
-  memset(&props, 0, sizeof(props));
+  // Zero-init ({}): runtimeVersion is read below even on partial SDK fills
+  // and runtimeName is read as a C-string - uninitialized bytes would
+  // surface as garbage in JS (getBounds hazard class).
+  pwaosInstanceProperties props{};
   props.type = PWAOS_TYPE_INSTANCE_GET_PROPERTIES;
-  props.next = nullptr;
+  props.next = NULL;
 
   PWAOS_API_CALL(env, pwaosInstance_getProperties(instance_handle, &props));
 
@@ -206,10 +207,14 @@ static napi_value InstanceCreateObjectInterface(napi_env env, napi_callback_info
     return nullptr;
   }
 
-  pwaosObjectInterfaceCreateInfo c_info;
-  memset(&c_info, 0, sizeof(c_info));
-  c_info.type = PWAOS_TYPE_OBJECT_INTERFACE_CREATE_INFO;
-  c_info.next = nullptr;
+  pwaosObjectInterfaceCreateInfo c_info = {
+      .type = PWAOS_TYPE_OBJECT_INTERFACE_CREATE_INFO,
+      .next = NULL,
+      .constructor = NULL,
+      .constructorUserData = NULL,
+      .destructor = NULL,
+      .destructorUserData = NULL,
+  };
 
   napi_value constructor_val;
   std::unique_ptr<InstanceCallbackContext> constructor_ctx;
@@ -422,10 +427,12 @@ static napi_value CreatePwa(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosAppCreateInfo c_info = {
-    .type = PWAOS_TYPE_PWA_CREATE_INFO,
-    .next = nullptr,
-  };
+  // Zero-init ({}): appUrl is a const array member (plain declaration is
+  // ill-formed), the tail beyond the copied URL goes over IPC, and every
+  // field below is filled explicitly (getBounds hazard class).
+  pwaosAppCreateInfo c_info{};
+  c_info.type = PWAOS_TYPE_PWA_CREATE_INFO;
+  c_info.next = nullptr;
 
   // 读取 type 字段（必填）
   napi_value type_val;

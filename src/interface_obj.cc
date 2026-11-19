@@ -38,7 +38,10 @@ static bool ObjectInterfaceMethodCallback(
   char* resultJsonStr,
   int maxResultJsonStrLength,
   void* userData) {
-  auto* callback_ctx = (InterfaceCallbackContext*)userData;
+  // Method-level callbacks are not wired to JS yet - keep the SDK contract
+  // (return false = no result produced) and ignore the context for now.
+  (void)argc; (void)argvJsonStr; (void)resultJsonStr;
+  (void)maxResultJsonStrLength; (void)userData;
   return false;
 }
 static void ObjectInterfaceMethodCallback(napi_env env, napi_value js_cb, void* context, void* data) {

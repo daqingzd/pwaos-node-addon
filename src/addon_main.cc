@@ -19,6 +19,10 @@ static void StartHandleEventsTimer(napi_env env) {
     100, // first fire
     100  // repeat
   );
+  // Don't keep the Node event loop alive just for event polling: it is a
+  // raw uv handle (invisible to process._getActiveHandles()) and would
+  // otherwise prevent the process from exiting on its own.
+  uv_unref((uv_handle_t*)&handle_events_timer);
 }
 
 static void StopHandleEventsTimer() {
@@ -67,20 +71,27 @@ napi_value InitPwaos(napi_env env, napi_callback_info info) {
     .callback = CallPwaosCallback,
     .userData = data.get(),
   };
-  pwaosInitializeInfo initializeInfo = {
-    .type = PWAOS_TYPE_INITIALIZE_INFO,
-    .next = &callbackInfo,
-    .argc = 0,
-    .argv = nullptr,
-    .use_dedicated_thread = false,
-  };
+  // Zero-init ({}): the header may carry fields this code does not set
+  // (e.g. connection_timeout) - they must be deterministic (getBounds class).
+  pwaosInitializeInfo initializeInfo{};
+  initializeInfo.type = PWAOS_TYPE_INITIALIZE_INFO;
+  initializeInfo.next = &callbackInfo;
+  initializeInfo.argc = 0;
+  initializeInfo.argv = nullptr;
+  initializeInfo.use_dedicated_thread = false;
 
   auto result = pwaos_init(&initializeInfo);
   if (result == PWAOS_RESULT_PENDING) {
     return data.release()->promise;
   }
 
-  PWAOS_API_CALL_AND_RETURN(env, result);
+  // pwaos_init completed synchronously (SUCCESS or an error code): return
+  // the raw int32 code, matching the documented "init returns int" contract.
+  // (The tsfn promise is discarded; the runtime never fires its callback.)
+  data.reset();
+  napi_value code_val;
+  NODE_API_CALL(env, napi_create_int32(env, result, &code_val));
+  return code_val;
 }
 
 static napi_value ShutDownPwaos(napi_env env, napi_callback_info info) {
@@ -155,10 +166,11 @@ static napi_value CreateInstance(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosInstanceCreateInfo instanceCreateInfo = {
-    .type = PWAOS_TYPE_INSTANCE_CREATE_INFO,
-    .next = nullptr,
-  };
+  // Zero-init ({}): serverUrl is a const array member - the tail beyond the
+  // copied URL must be deterministic over IPC (getBounds hazard class).
+  pwaosInstanceCreateInfo instanceCreateInfo{};
+  instanceCreateInfo.type = PWAOS_TYPE_INSTANCE_CREATE_INFO;
+  instanceCreateInfo.next = nullptr;
 
   // 读取 type 字段（必填）
   napi_value type_val;

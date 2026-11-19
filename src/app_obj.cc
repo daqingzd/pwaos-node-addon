@@ -92,9 +92,6 @@ static void app_obj_finalizer(napi_env env,
 // 将 JS 对象转换为 pwaosWindowBoundsInfo
 static napi_status bounds_from_js(napi_env env, napi_value js_bounds, pwaosWindowBoundsInfo* bounds) {
   napi_status status;
-  memset(bounds, 0, sizeof(*bounds));
-  bounds->type = PWAOS_TYPE_WINDOW_BOUNDS_INFO;
-  bounds->next = nullptr;
 
   napi_value x_val, y_val, w_val, h_val;
   status = napi_get_named_property(env, js_bounds, "x", &x_val);
@@ -237,7 +234,10 @@ static napi_value AppGetBounds(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosWindowBoundsInfo bounds;
+  // SDK 0.2.x validates the out-param's type field: zero the struct and
+  // set the type before the call or getBounds fails VALIDATION_FAILURE.
+  pwaosWindowBoundsInfo bounds {PWAOS_TYPE_WINDOW_BOUNDS_INFO, nullptr,
+                                0, 0, 0, 0};
   pwaosResult result = pwaosApp_getBounds(app_handle, &bounds);
   if (result != PWAOS_RESULT_SUCCESS) {
     throw_pwaos_error(env, result);
@@ -273,7 +273,8 @@ static napi_value AppSetBounds(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosWindowBoundsInfo bounds;
+  pwaosWindowBoundsInfo bounds {PWAOS_TYPE_WINDOW_BOUNDS_INFO, nullptr,
+                                0, 0, 0, 0};
   napi_status status = bounds_from_js(env, argv[0], &bounds);
   if (status != napi_ok) {
     napi_throw_type_error(env, nullptr, "Invalid bounds object");
@@ -380,11 +381,11 @@ static napi_value AppGetDevToolsUri(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosUriInfo uri_data;
-  memset(&uri_data, 0, sizeof(uri_data));
+  // Zero-init ({}): SDK 0.2.x validates out-params and url[] must never leak
+  // uninitialized bytes into the JS string (getBounds hazard class).
+  pwaosUriInfo uri_data{};
   uri_data.type = PWAOS_TYPE_DEVTOOLS_URI_INFO;
-  uri_data.next = nullptr;
-
+  uri_data.next = NULL;
   auto result = pwaosApp_getDevToolsUri(app_handle, &uri_data);
   if (PWAOS_RESULT_SUCCESS == result ) {
     napi_value js_uri;
@@ -497,10 +498,11 @@ static napi_value AppGetUserAgent(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosUserAgentInfo ua_data;
-  memset(&ua_data, 0, sizeof(ua_data));
+  // Zero-init ({}): userAgent[] is read back as a C-string below and must
+  // never contain uninitialized bytes (getBounds hazard class).
+  pwaosUserAgentInfo ua_data{};
   ua_data.type = PWAOS_TYPE_USER_AGENT_INFO;
-  ua_data.next = nullptr;
+  ua_data.next = NULL;
 
   PWAOS_API_CALL(env, pwaosApp_getUserAgent(app_handle, &ua_data));
 
@@ -542,10 +544,11 @@ static napi_value AppSetUserAgent(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  pwaosUserAgentInfo ua_data;
-  memset(&ua_data, 0, sizeof(ua_data));
+  // Zero-init ({}): the tail of userAgent[] beyond the copied string goes
+  // over the IPC channel and must be deterministic (getBounds hazard class).
+  pwaosUserAgentInfo ua_data{};
   ua_data.type = PWAOS_TYPE_USER_AGENT_INFO;
-  ua_data.next = nullptr;
+  ua_data.next = NULL;
   NODE_API_CALL(env, napi_get_value_string_utf8(env, argv[0], ua_data.userAgent, MAX_URI_LEN, &ua_len));
 
   PWAOS_API_CALL_AND_RETURN(env, pwaosApp_setUserAgent(app_handle, &ua_data));

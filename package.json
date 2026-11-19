@@ -1,34 +1,76 @@
 {
-  "name": "@pwaos/runtime-node",
+  "name": "@pwaos.net/runtime-client-api",
   "version": "0.2.1",
-  "description": "Node.js bindings for the pwaOS Runtime Client API — run and manage PWAs from Node.js.",
-  "gypfile": true,
+  "type": "module",
+  "description": "Node.js native addon for the PwaOS RuntimeClient API. Automatically resolves the matching Runtime SDK for your platform.",
+  "engines": {
+    "node": ">=18"
+  },
+  "homepage": "https://www.pwaos.net/api",
+  "author": {
+    "name": "daqingzd",
+    "url": "https://github.com/daqingzd"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daqingzd/pwaos-node-addon.git"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "files": [
+    "runtime.cjs",
+    "runtime.js",
+    "scripts",
+    "src",
+    "test",
+    "binding.gyp",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "runtime.cjs",
+  "exports": {
+    ".": {
+      "import": "./runtime.js",
+      "require": "./runtime.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@pwaos.net/runtime": "0.2.1"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  },
   "scripts": {
     "install": "node-gyp rebuild",
-    "build": "node-gyp rebuild",
-    "rebuild": "node-gyp rebuild",
-    "clean": "node-gyp clean",
-    "test": "node test/index.js"
+    "build": "node-gyp configure && node-gyp build",
+    "test": "node --test test/test.cjs",
+    "test:unit": "node --test test/test.cjs"
+  },
+  "bugs": {
+    "url": "https://github.com/daqingzd/pwaos-node-addon/issues"
   },
   "keywords": [
     "pwaos",
-    "pwa",
     "runtime",
-    "native",
-    "addon"
+    "client",
+    "pwa",
+    "webview",
+    "webapp",
+    "webapplication",
+    "browser",
+    "napi"
   ],
-  "license": "MIT",
-  "dependencies": {
-    "node-addon-api": "^8.0.0",
-    "7zip-bin": "^5.2.0"
-  },
-  "files": [
-    "build/Release/pwaos_runtime.node",
-    "third_party/pwaos_sdk/",
-    "src/",
-    "scripts/setup-sdk.js",
-    "binding.gyp",
-    "index.js",
-    "test"
-  ]
+  "os": [
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "ia32"
+  ],
+  "gypfile": true
 }
