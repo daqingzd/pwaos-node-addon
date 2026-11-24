@@ -30,14 +30,21 @@ const PACKAGE_PREFIX = '@pwaos.net/runtime-';
 /**
  * Platform subpackage candidates for the current process, in preference
  * order. The primary candidate is the strictly-derived
- * @pwaos.net/runtime-<platform>-<arch>; on win32 the only upstream runtime is
- * 32-bit (x86), which also runs on 64-bit Windows (WOW64), so the x86
- * package is a secondary candidate for x64 hosts.
+ * @pwaos.net/runtime-<platform>-<arch>. Windows notes:
+ *   - win32-x64: the win32-x64 package carries the upstream 32-bit (x86)
+ *     payload (runs via WOW64); the ia32 win32-x86 package is kept as a
+ *     fallback for installs that predate the x64 package.
+ *   - win32-ia32: the auto-installed package is win32-x86 (cpu ia32), while
+ *     the strictly-derived name runtime-win32-ia32 does not exist - the x86
+ *     package is the only candidate there.
  */
 function getPlatformPackageCandidates() {
   const primary = `${PACKAGE_PREFIX}${process.platform}-${process.arch}`;
   if (process.platform === 'win32' && process.arch === 'x64') {
     return [primary, `${PACKAGE_PREFIX}win32-x86`];
+  }
+  if (process.platform === 'win32' && process.arch === 'ia32') {
+    return [`${PACKAGE_PREFIX}win32-x86`];
   }
   return [primary];
 }

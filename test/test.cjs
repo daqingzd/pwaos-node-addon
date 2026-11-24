@@ -380,6 +380,44 @@ describe('PwaOS Addon - surface', function() {
         });
     });
 
+    describe('Platform package candidates', function() {
+        it('derive candidates per platform/arch (win32 aliasing)', function() {
+            const { getPlatformPackageCandidates } =
+                require('../scripts/runtime-resolver.cjs');
+            const origPlatform =
+                Object.getOwnPropertyDescriptor(process, 'platform');
+            const origArch = Object.getOwnPropertyDescriptor(process, 'arch');
+            const setProp = (name, desc, value) => Object.defineProperty(
+                process, name, value === undefined ? desc : { ...desc, value });
+            try {
+                Object.defineProperty(process, 'platform',
+                    { ...origPlatform, value: 'win32' });
+                Object.defineProperty(process, 'arch',
+                    { ...origArch, value: 'x64' });
+                // x64 Windows: the x64 package first (WOW64 payload), the
+                // ia32 win32-x86 package as a legacy-install fallback.
+                assert.deepStrictEqual(getPlatformPackageCandidates(),
+                    ['@pwaos.net/runtime-win32-x64',
+                     '@pwaos.net/runtime-win32-x86']);
+                Object.defineProperty(process, 'arch',
+                    { ...origArch, value: 'ia32' });
+                // 32-bit Windows: npm auto-installs win32-x86 (cpu ia32);
+                // runtime-win32-ia32 does not exist.
+                assert.deepStrictEqual(getPlatformPackageCandidates(),
+                    ['@pwaos.net/runtime-win32-x86']);
+                Object.defineProperty(process, 'platform',
+                    { ...origPlatform, value: 'linux' });
+                Object.defineProperty(process, 'arch',
+                    { ...origArch, value: 'x64' });
+                assert.deepStrictEqual(getPlatformPackageCandidates(),
+                    ['@pwaos.net/runtime-linux-x64']);
+            } finally {
+                setProp('platform', origPlatform);
+                setProp('arch', origArch);
+            }
+        });
+    });
+
     describe('Class introspection', function() {
         it('Instance class has expected methods', function() {
             const expected = [

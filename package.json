@@ -1,6 +1,6 @@
 {
   "name": "@pwaos.net/runtime-client-api",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "type": "module",
   "description": "Node.js native addon for the PwaOS RuntimeClient API. Automatically resolves the matching Runtime SDK for your platform.",
   "engines": {
@@ -39,7 +39,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@pwaos.net/runtime": "0.2.2"
+    "@pwaos.net/runtime": "^0.2.1"
   },
   "devDependencies": {
     "node-gyp": "^10.0.0"

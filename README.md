@@ -100,8 +100,9 @@ At require time the runtime directory is resolved in this order:
 
 1. The installed platform subpackage
    `@pwaos.net/runtime-<platform>-<arch>/runtime` in `node_modules`
-   (primary; on win32-x64 the `win32-x86` package is a fallback via
-   WOW64).
+   (primary; on win32 the payload is the upstream 32-bit build, so the
+   win32-x64 package serves x64 hosts via WOW64 and the `win32-x86`
+   package covers ia32 hosts).
 2. An upward `node_modules` walk from this module's directory, covering
    non-standard layouts.
 
