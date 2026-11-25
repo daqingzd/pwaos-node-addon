@@ -19,6 +19,32 @@ This package automatically pulls in
 the prebuilt Runtime SDK distribution for your platform. The native addon is built automatically
 at install time (or loaded from prebuilt binaries). No manual download or compilation is required.
 
+## Troubleshooting
+
+### Windows: `missing any Windows SDK` even though the SDK is installed
+
+**Symptom**
+
+`npm install "@pwaos.net/runtime-client-api"` from a regular PowerShell or CMD
+window fails with:
+
+```text
+gyp ERR! find VS - found VC++ toolset: v142
+gyp ERR! find VS - missing any Windows SDK
+gyp ERR! find VS could not find a version of Visual Studio 2017 or newer to use
+
+Fix: Run npm install from a Native Tools Command Prompt instead of a regular
+shell: 
+
+```text
+cd <your-project>
+npm install @pwaos.net/runtime-client-api
+```
+
+The Native Tools Command Prompt preconfigures all MSVC-related environment
+variables that node-gyp needs, so the build finds the toolchain and the
+installed Windows SDK automatically. 
+
 ## Platform Support
 
 | OS      | Architecture                  | Status |

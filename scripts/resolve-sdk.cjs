@@ -1,11 +1,15 @@
 'use strict';
 /**
- * resolve-sdk.js - locate the pwaos SDK (headers + client lib) and the
+ * resolve-sdk.cjs - locate the pwaos SDK (headers + client lib) and the
  * runtime bundle for this package.
  *
- * Shared by scripts/sdk-dir.js (build time) and test code. Sources, in order:
+ * Shared by scripts/sdk-dir.cjs (build time) and test code. The runtime
+ * DIR always lives at <platform package>/runtime, so runtime resolution
+ * delegates to scripts/runtime-resolver.cjs (the same candidate list and
+ * node_modules walk the shipped client uses). SDK sources, in order:
  *
- *     1. $PWAOS_SDK_DIR (an explicit SDK root, validated)
+ *     1. $PWAOS_SDK_DIR (an explicit SDK root, validated; build-time
+ *        headers/lib override only - it never affects runtimeDir)
  *     2. the installed @pwaos.net/runtime-<platform>-<arch> package
  *        (include/ + lib/<os>/ + runtime/ ship inside that package; this
  *        is what makes `npm install @pwaos.net/runtime` self-contained - the
@@ -19,30 +23,21 @@
  * this one (optionalDependencies of @pwaos.net/runtime), so the require.resolve
  * walk below finds it.
  *
- * Runtime validity: the runtime dir is the platform package's runtime/
- * subdir and is only reported when runtime/pwaos_server exists and is NOT
- * an un-smudged git-lfs pointer (starts with the LFS version url).
+ * Runtime validity (runtime/pwaos_server exists) is checked by
+ * runtime-resolver.cjs.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// Installed platform subpackage that carries the SDK consumer files
-// (include/ + lib/<os>/). Written as a function so tests can stub it.
-function platformPackageName() {
-    if (process.platform === 'linux') return '@pwaos.net/runtime-linux-x64';
-    if (process.platform === 'win32') return '@pwaos.net/runtime-win32-x86';
-    return null;
-}
+const runtimeResolver = require('./runtime-resolver.cjs');
+const { getPlatformPackageCandidates } = runtimeResolver;
 
 const HEADER_NAME = 'runtime_client_api.h';
 const LIB_SRC = {
     linux: 'lib/linux/libpwaos_runtime_api.so',
     win: 'lib/win/pwaos_runtime_api.dll',
 };
-const SERVER_BASENAME = process.platform === 'win32'
-    ? 'pwaos_server.exe' : 'pwaos_server';
-const LFS_POINTER_MAGIC = 'version https://git-lfs';
 
 // Platform -> LIB_SRC key.
 function sdkOs() {
@@ -58,48 +53,27 @@ function dirHasSdkFiles(dir, osName) {
     );
 }
 
-/** True when the file exists but is an un-smudged git-lfs pointer. */
-function isLfsPointer(file) {
-    try {
-        const st = fs.statSync(file);
-        if (st.size >= 512) return false; // pointers are ~130 bytes
-        const head = fs.readFileSync(file, 'utf8');
-        return head.startsWith(LFS_POINTER_MAGIC);
-    } catch (_) {
-        return false;
-    }
-}
-
-/** The runtime subdir of an SDK dir, or null when it has no usable server. */
-function runtimeDirOf(sdkDir) {
-    const rt = path.join(sdkDir, 'runtime');
-    const server = path.join(rt, SERVER_BASENAME);
-    try {
-        if (!fs.statSync(server).isFile()) return null;
-    } catch (_) {
-        return null;
-    }
-    if (isLfsPointer(server)) return null;
-    return rt;
-}
-
 /**
- * The SDK root of the installed platform subpackage, or null.
- * require.resolve is used from THIS file's directory so the same
- * node_modules walk applies (the client's own node_modules or any
- * ancestor's - matching how npm hoists optionalDependencies).
- * On failure every error is swallowed: "not installed" is normal.
+ * The SDK root of the first installed platform subpackage that carries
+ * include/ + lib/<os>/, or null. Uses the shared candidate list from
+ * runtime-resolver.cjs (same platform/arch derivation and win32 fallback
+ * order as the shipped client's runtime resolution). require.resolve is
+ * used from THIS file's directory so the same node_modules walk applies
+ * (the client's own node_modules or any ancestor's - matching how npm
+ * hoists optionalDependencies). On failure every error is swallowed:
+ * "not installed" is normal.
  */
 function installedSdkDir(osName) {
-    const pkg = platformPackageName();
-    if (!pkg) return null;
-    let pkgRoot;
-    try {
-        pkgRoot = path.dirname(require.resolve(`${pkg}/package.json`));
-    } catch (_) {
-        return null;
+    for (const pkg of getPlatformPackageCandidates()) {
+        let pkgRoot;
+        try {
+            pkgRoot = path.dirname(require.resolve(`${pkg}/package.json`));
+        } catch (_) {
+            continue; // not installed - try the next candidate
+        }
+        if (dirHasSdkFiles(pkgRoot, osName)) return pkgRoot;
     }
-    return dirHasSdkFiles(pkgRoot, osName) ? pkgRoot : null;
+    return null;
 }
 
 function resolveSdkDir(osName) {
@@ -112,18 +86,35 @@ function resolveSdkDir(osName) {
     return installedSdkDir(osName);
 }
 
+/**
+ * The runtime DIR: always <installed platform package>/runtime, resolved
+ * by runtime-resolver.cjs (same candidate list and node_modules walk the
+ * shipped client uses, so build-time and run-time resolution can never
+ * drift). Returns null when no usable runtime is installed. Independent
+ * of PWAOS_SDK_DIR: that env var is a build-time headers/lib override and
+ * must not redirect the runtime lookup at a possibly older tree.
+ */
+function resolveRuntimeDir() {
+    const osName = sdkOs();
+    if (!osName) return null;
+    try {
+        return runtimeResolver.resolveRuntimePath();
+    } catch (_) {
+        return null;
+    }
+}
+
 /** Resolve {sdkDir, runtimeDir} per the documented order; either may be null. */
 function resolve() {
     const osName = sdkOs();
     if (!osName) return { sdkDir: null, runtimeDir: null };
-    const sdkDir = resolveSdkDir(osName);
-    return { sdkDir, runtimeDir: sdkDir ? runtimeDirOf(sdkDir) : null };
+    return {
+        sdkDir: resolveSdkDir(osName),
+        runtimeDir: resolveRuntimeDir(),
+    };
 }
 
 module.exports = {
     resolve,
-    runtimeDirOf,
-    isLfsPointer,
     installedSdkDir,
-    SERVER_BASENAME,
 };
