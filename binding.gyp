@@ -64,7 +64,7 @@
           ],
           "msvs_settings": {
             "VCCLCompilerTool": {
-              "AdditionalOptions": ["/std:c++20"],
+              "AdditionalOptions": ["/std:c++20", "/utf-8"],
               "ForcedIncludeFiles": ["memory"]
             }
           },
