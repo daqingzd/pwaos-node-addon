@@ -1,33 +1,38 @@
 /**
- * PwaOS Node.js Addon - Test Suite
+ * @pwaos.net/runtime-client-api - Test Suite
+ *
+ * This suite tests the PUBLIC INTERFACE of the package, the way any
+ * Node.js consumer would use it: `require('@pwaos.net/runtime-client-api')`.
+ * It must not reach into the package's internal files (scripts/, build/,
+ * runtime.cjs) or undocumented interfaces - everything asserted here is
+ * reachable from the package's export surface or the public environment
+ * contract (PWAOS_RUNTIME_PATH).
  *
  * Two layers:
- *   1. Surface tests - always run when the addon is built. Exercise
- *      exported constants, class methods, and the wrapper. No runtime
- *      server required.
- *   2. Integration tests - mirror the chromium-pwaos addon flow:
+ *   1. Surface tests - exercise the exported constants, classes and
+ *      methods. No runtime server required.
+ *   2. Integration tests - mirror the documented flow:
  *        setRuntimeExecutablePath -> init -> createInstance -> pollEvent
  *        loop until instanceStatusWorking -> createPwa -> exercise App
- *        methods -> pollEvent until appStatusStopping -> teardown.
- *      Skipped unless PWAOS_RUNTIME_PATH is set (or run via
- *      `npm run test:integration`).
+ *        methods -> pollUntil appStatusStopping -> teardown.
+ *
+ * Run: npm test (node --test test/test.cjs) or npx mocha test/test.cjs -
+ * the suite registers under both runners. A direct
+ * `node test/test.cjs [url]` runs the standalone CLI demo instead.
  */
 
 const assert = require('assert');
 
 // ---------------------------------------------------------------------------
-// Direct-run mode: `node test/test.js [options] [url]` runs the standalone
-// CLI demo (open a URL in the runtime browser) instead of the mocha suite.
-// Run under mocha (npm test) for the test suite below.
+// Direct-run mode: `node test/test.cjs [options] [url]` runs the standalone
+// CLI demo (open a URL in the runtime browser) instead of the test suite.
 // ---------------------------------------------------------------------------
-
-const PLATFORM = process.platform === 'win32' ? 'win' : process.platform;
 
 const DEFAULTS = {
     addon: require('path').join(
         __dirname, '..', 'build', 'Release', 'pwaos_addon.node'),
     runtime: require('path').join(
-        __dirname, '..', '..', 'runtime-linux-x64', 'runtime'),
+        __dirname, '..', '..', 'runtime', 'runtime-linux-x64', 'runtime'),
     url: 'https://www.pwaos.net',
 };
 
@@ -39,8 +44,8 @@ const err = (msg) => console.error(`[pwaos] ❌ ${msg}`);
 function printUsage() {
     console.log(`
 Usage:
-  mocha test/test.js            # run the test suite (or: npm test)
-  node test/test.js [options] [url]
+  npm test                       # run the test suite
+  node test/test.cjs [options] [url]
 
 Options (demo mode):
   -a, --addon <path>     Path to pwaos_addon.node
@@ -52,8 +57,8 @@ Options (demo mode):
 
 Examples:
   npm test
-  node test/test.js https://example.com
-  node test/test.js -a ./build/Release/pwaos_addon.node -u https://example.com
+  node test/test.cjs https://example.com
+  node test/test.cjs -a ./build/Release/pwaos_addon.node -u https://example.com
 `);
 }
 
@@ -87,34 +92,30 @@ function parseArgs(argv) {
     return opts;
 }
 
-// The CLI demo: load the addon, init the runtime, open the URL in a
+// The CLI demo: load the package, init the runtime, open the URL in a
 // browser-type PWA window, pump events until the app stops, shut down.
 async function runDemo() {
     const path = require('path');
     const fs = require('fs');
     const opts = parseArgs(process.argv.slice(2));
 
-    const addonAbsolute   = path.resolve(__dirname, opts.addon);
     const runtimeAbsolute = path.resolve(__dirname, opts.runtime);
 
-    if (!fs.existsSync(addonAbsolute)) {
-        err(`Addon file not found: ${addonAbsolute}`);
-        process.exit(1);
-    }
     if (!fs.existsSync(runtimeAbsolute)) {
         err(`Runtime directory not found: ${runtimeAbsolute}`);
         process.exit(1);
     }
 
-    log(`Addon   : ${addonAbsolute}`);
     log(`Runtime : ${runtimeAbsolute}`);
     log(`URL     : ${opts.url}`);
 
     let pwaos;
     try {
-        pwaos = require(addonAbsolute);
+        // Public interface: the package resolves its own addon and binds
+        // the runtime directory at require time.
+        pwaos = require('@pwaos.net/runtime-client-api');
     } catch (e) {
-        err(`Failed to load addon: ${e.message}`);
+        err(`Failed to load @pwaos.net/runtime-client-api: ${e.message}`);
         process.exit(1);
     }
 
@@ -209,7 +210,7 @@ async function runDemo() {
 
 // Mode switch:
 //   - mocha (npx mocha test/test.cjs): describe/it globals exist -> the
-//     suite below runs (17 tests).
+//     suite below runs.
 //   - `node --test test/test.cjs`: NODE_TEST_CONTEXT is set but describe/it
 //     are undefined at load time -> describe/it/before/after/afterEach are
 //     bridged from node:test so the SAME suite registers under both
@@ -241,25 +242,23 @@ if (nodeTestRunner && !mochaGlobals) {
 }
 
 let addon;
-let addonBuilt = false;
+let packageLoaded = false;
 
-// The package entry point (../runtime.cjs) is REQUIRED here - not the raw
-// addon binary - because it performs the setup contract: dynamic-library
-// search path, addon load, and pwaos_setRuntimeExecutablePath at require
-// time. Its export surface IS the addon (module.exports = addon).
+// PUBLIC INTERFACE: require the package by name, exactly like a consumer.
+// The export surface IS the native addon; at require time the package
+// performs its documented setup (dynamic-library search path, addon load,
+// pwaos_setRuntimeExecutablePath -> PWAOS_RUNTIME_PATH).
 try {
-    addon = require('../runtime.cjs');
-    // The setup contract: loading the package must have bound a runtime
-    // directory via pwaos_setRuntimeExecutablePath.
+    addon = require('@pwaos.net/runtime-client-api');
     assert.strictEqual(typeof addon.setRuntimeExecutablePath, 'function');
-    addonBuilt = true;
+    packageLoaded = true;
 } catch (e) {
-    // Addon not built or setup failed - tests will be skipped
+    // Package not built/installed - tests will be skipped
 }
 
-if (!addonBuilt) {
-    console.log('⚠️  Addon not built - tests will be skipped');
-    console.log('   Run "npm run build" to enable tests\n');
+if (!packageLoaded) {
+    console.log('⚠️  @pwaos.net/runtime-client-api not loadable - tests will be skipped');
+    console.log('   Run "npm run build" (or npm install) to enable tests\n');
 } else {
     console.log('✓ Package loaded (module.exports = addon) - running tests\n');
 }
@@ -268,9 +267,9 @@ if (!addonBuilt) {
 // 1. Surface tests (no runtime required)
 // ---------------------------------------------------------------------------
 
-describe('PwaOS Addon - surface', function() {
+describe('PwaOS client-api - surface', function() {
     before(function() {
-        if (!addonBuilt) this.skip();
+        if (!packageLoaded) this.skip();
     });
 
     describe('Constants', function() {
@@ -340,81 +339,19 @@ describe('PwaOS Addon - surface', function() {
         });
     });
 
-    describe('Package setup contract', function() {
+    describe('Package public contract', function() {
         it('module.exports IS the addon (no extra surface)', function() {
-            const native = require('../build/Release/pwaos_addon.node');
-            assert.strictEqual(require('../runtime.cjs'), native);
             // Spot-check the native classes are reachable through the export.
             assert.strictEqual(typeof addon.Instance, 'function');
             assert.strictEqual(typeof addon.App, 'function');
         });
 
         it('loading the package set the runtime executable path', function() {
-            // runtime.cjs eagerly calls pwaos_setRuntimeExecutablePath with the
-            // resolved runtime dir; the SDK tooling convention exposes it as
-            // PWAOS_RUNTIME_PATH. Integration tests use the same value.
+            // PUBLIC contract: the documented PWAOS_RUNTIME_PATH env var is
+            // set by requiring the package.
             const rt = process.env.PWAOS_RUNTIME_PATH;
             assert.ok(rt && rt.length > 0,
                 'PWAOS_RUNTIME_PATH not set by loading the package');
-            const {
-                resolveRuntimePath,
-            } = require('../scripts/runtime-resolver.cjs');
-            assert.strictEqual(rt, resolveRuntimePath());
-        });
-
-        it('dynamic-library search path includes the platform lib dir', function() {
-            const path = require('path');
-            const { getPlatformPackageName } =
-                require('../scripts/runtime-resolver.cjs');
-            const pkgJson = require.resolve(`${getPlatformPackageName()}/package.json`);
-            const libDir = process.platform === 'win32'
-                ? path.join(path.dirname(pkgJson), 'lib', 'win')
-                : path.join(path.dirname(pkgJson), 'lib', process.platform);
-            if (process.platform === 'win32') {
-                assert.ok(process.env.PATH.includes(libDir),
-                    `PATH missing ${libDir}`);
-            } else {
-                assert.ok((process.env.LD_LIBRARY_PATH || '').includes(libDir),
-                    `LD_LIBRARY_PATH missing ${libDir}`);
-            }
-        });
-    });
-
-    describe('Platform package candidates', function() {
-        it('derive candidates per platform/arch (win32 aliasing)', function() {
-            const { getPlatformPackageCandidates } =
-                require('../scripts/runtime-resolver.cjs');
-            const origPlatform =
-                Object.getOwnPropertyDescriptor(process, 'platform');
-            const origArch = Object.getOwnPropertyDescriptor(process, 'arch');
-            const setProp = (name, desc, value) => Object.defineProperty(
-                process, name, value === undefined ? desc : { ...desc, value });
-            try {
-                Object.defineProperty(process, 'platform',
-                    { ...origPlatform, value: 'win32' });
-                Object.defineProperty(process, 'arch',
-                    { ...origArch, value: 'x64' });
-                // x64 Windows: the x64 package first (WOW64 payload), the
-                // ia32 win32-x86 package as a legacy-install fallback.
-                assert.deepStrictEqual(getPlatformPackageCandidates(),
-                    ['@pwaos.net/runtime-win32-x64',
-                     '@pwaos.net/runtime-win32-x86']);
-                Object.defineProperty(process, 'arch',
-                    { ...origArch, value: 'ia32' });
-                // 32-bit Windows: npm auto-installs win32-x86 (cpu ia32);
-                // runtime-win32-ia32 does not exist.
-                assert.deepStrictEqual(getPlatformPackageCandidates(),
-                    ['@pwaos.net/runtime-win32-x86']);
-                Object.defineProperty(process, 'platform',
-                    { ...origPlatform, value: 'linux' });
-                Object.defineProperty(process, 'arch',
-                    { ...origArch, value: 'x64' });
-                assert.deepStrictEqual(getPlatformPackageCandidates(),
-                    ['@pwaos.net/runtime-linux-x64']);
-            } finally {
-                setProp('platform', origPlatform);
-                setProp('arch', origArch);
-            }
         });
     });
 
@@ -477,13 +414,15 @@ describe('PwaOS Addon - surface', function() {
 //   - init() is one-shot: after shutDown() the runtime cannot re-init in the
 //     same process (later calls segfault inside the runtime).
 // Therefore all integration coverage lives in a SINGLE lifecycle test that
-// follows the chromium-pwaos addon flow: setRuntimeExecutablePath -> init ->
+// follows the documented flow: setRuntimeExecutablePath -> init ->
 // createInstance -> pollEvent until instanceStatusWorking -> createPwa ->
 // exercise App methods -> pollEvent until appStatusStopping -> teardown.
 // ---------------------------------------------------------------------------
 
-const RUNTIME_PATH = process.env.PWAOS_RUNTIME_PATH ||
-    require('../scripts/resolve-sdk.cjs').resolve().runtimeDir;
+// PUBLIC contract only: the integration runtime path comes from
+// PWAOS_RUNTIME_PATH, which the package itself sets when loaded (falling
+// back to a caller-provided value for explicitly pinned runs).
+const RUNTIME_PATH = process.env.PWAOS_RUNTIME_PATH;
 const POLL_INTERVAL_MS = 100;
 const POLL_TIMEOUT_MS = 30_000;
 
@@ -507,17 +446,17 @@ function pollUntil(fn, timeoutMs) {
     });
 }
 
-const describeOrSkipIntegration = (addonBuilt && RUNTIME_PATH) ? describe : describe.skip;
+const describeOrSkipIntegration = (packageLoaded && RUNTIME_PATH) ? describe : describe.skip;
 
 (describeOrSkipIntegration === describe.skip ? describe.skip : describe)(
-    'PwaOS Addon - integration',
+    'PwaOS client-api - integration',
     function() {
         let instance = null;
         let app = null;
         let lifecycleFailed = false;
 
         before(function() {
-            if (!addonBuilt || !RUNTIME_PATH) this.skip();
+            if (!packageLoaded || !RUNTIME_PATH) this.skip();
             // mocha-specific timeout API; node:test's SuiteContext has no
             // this.timeout - guard so the same file runs under both runners.
             if (typeof this.timeout === 'function') this.timeout(60_000);
@@ -714,7 +653,7 @@ const describeOrSkipIntegration = (addonBuilt && RUNTIME_PATH) ? describe : desc
         it('runtime loads a real page and its JS calls back over the network',
             async function() {
                 if (typeof this.timeout === 'function') this.timeout(30_000);
-                if (!addonBuilt || !RUNTIME_PATH) this.skip();
+                if (!packageLoaded || !RUNTIME_PATH) this.skip();
                 if (!app) this.skip(); // lifecycle test failed - session unusable
 
                 const hits = [];
@@ -776,9 +715,9 @@ const describeOrSkipIntegration = (addonBuilt && RUNTIME_PATH) ? describe : desc
 );
 
 // Summary
-if (!addonBuilt) {
-    console.log('\n⚠️  NOTE: To run surface tests, build the addon first:');
-    console.log('   npm run build\n');
+if (!packageLoaded) {
+    console.log('\n⚠️  NOTE: To run surface tests, install or build the package first:');
+    console.log('   npm install  (or: npm run build)\n');
 } else if (!RUNTIME_PATH) {
     console.log('ℹ️  Integration tests skipped (set PWAOS_RUNTIME_PATH to enable).');
     console.log('   Example: PWAOS_RUNTIME_PATH=/path/to/runtime npm run test:integration\n');

@@ -1,0 +1,47 @@
+{
+  "name": "@pwaos.net/runtime-client-api-win32-x86",
+  "version": "0.2.10",
+  "description": "Prebuilt native addon for @pwaos.net/runtime-client-api on Windows x86 (ia32). Installed automatically as an optional dependency; used when the install-time node-gyp build fails.",
+  "engines": {
+    "node": ">=18"
+  },
+  "homepage": "https://www.pwaos.net/api",
+  "author": {
+    "name": "daqingzd",
+    "url": "https://github.com/daqingzd"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daqingzd/pwaos-node-addon.git"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "files": [
+    "prebuilds",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "ia32"
+  ],
+  "scripts": {
+    "build": "node ../scripts/build-prebuilt-pkg.cjs ."
+  },
+  "bugs": {
+    "url": "https://github.com/daqingzd/pwaos-node-addon/issues"
+  },
+  "keywords": [
+    "pwaos",
+    "runtime",
+    "client",
+    "prebuilt",
+    "prebuilds",
+    "napi"
+  ]
+}

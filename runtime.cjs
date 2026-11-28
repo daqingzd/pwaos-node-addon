@@ -53,7 +53,35 @@ try {
 }
 
 // --- 2. load the native addon ---------------------------------------------
-const addon = require('./build/Release/pwaos_addon.node');
+// Locally built addon first (install: node-gyp rebuild); when that is
+// absent or unloadable (e.g. built on a machine whose RUNPATH no longer
+// matches), load the prebuilt addon shipped in the platform prebuilt
+// package @pwaos.net/runtime-client-api-<platform>-<arch> (an
+// optionalDependency). When neither loads, the ORIGINAL error is
+// rethrown so the user sees the real failure.
+function loadAddon() {
+    try {
+        return require('./build/Release/pwaos_addon.node');
+    } catch (localErr) {
+        try {
+            const { resolvePrebuiltAddon } =
+                require('./scripts/prebuild-resolver.cjs');
+            const prebuilt = resolvePrebuiltAddon();
+            if (prebuilt) {
+                try {
+                    return require(prebuilt);
+                } catch (prebuiltErr) {
+                    process.stderr.write(
+                        '[pwaos.net/runtime-client-api] prebuilt addon failed: '
+                        + prebuiltErr.message + '\n');
+                }
+            }
+        } catch (_) { /* resolver unavailable - no fallback */ }
+        throw localErr;
+    }
+}
+
+const addon = loadAddon();
 
 // --- 3. pwaos_setRuntimeExecutablePath -------------------------------------
 try {

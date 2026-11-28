@@ -17,7 +17,7 @@ npm install @pwaos.net/runtime-client-api
 This package automatically pulls in
 [`@pwaos.net/runtime`](https://www.npmjs.com/package/@pwaos.net/runtime), which installs
 the prebuilt Runtime SDK distribution for your platform. The native addon is built automatically
-at install time (or loaded from prebuilt binaries). No manual download or compilation is required.
+at install time; no manual compilation is required.
 
 ## Troubleshooting
 
@@ -159,6 +159,19 @@ Your Node.js code
 You should not `require('@pwaos.net/runtime')` directly. It is an internal
 dependency of `@pwaos.net/runtime-client-api` that distributes Runtime
 binaries by platform.
+
+## Versioning
+
+`@pwaos.net/runtime-client-api` declares its prebuilt fallback packages
+(`@pwaos.net/runtime-client-api-<platform>-<arch>`) as `optionalDependencies`
+with a caret range (`^0.2.1`), so an install always resolves the **latest
+published** prebuilt for the platform — the same rule used between
+`@pwaos.net/runtime` and `@pwaos.net/runtime-<platform>-<arch>`.
+
+A prebuilt package's version is always **greater than** the
+`@pwaos.net/runtime-client-api` version it was seeded from: the addon is
+captured from a consumer-style build *after* the client is published, then
+released as a new prebuilt version.
 
 ## License
 
